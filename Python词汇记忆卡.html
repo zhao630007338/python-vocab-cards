@@ -2660,17 +2660,40 @@
       clearTimeout(toastTimer);
       toastTimer = setTimeout(function() { if (toastEl) toastEl.style.display = 'none'; }, 2800);
     }
+    // 在线发音兜底：适用于没有 Web Speech API 或没装系统语音包的浏览器（如小米/华为自带浏览器）
+    function onlineSpeak(text, lang) {
+      var word = encodeURIComponent(text);
+      var isZh = lang && lang.indexOf('zh') === 0;
+      var spd = Math.max(1, Math.min(7, Math.round(speechRate * 4)));
+      var youdao = 'https://dict.youdao.com/dictvoice?audio=' + word + '&type=' + (isZh ? '1' : '2');
+      var baidu = 'https://fanyi.baidu.com/gettts?lan=' + (isZh ? 'zh' : 'en') + '&text=' + word + '&spd=' + spd + '&source=web';
+      var a = new Audio();
+      var triedBaidu = false;
+      function tryBaidu() {
+        if (triedBaidu) { toast('在线发音失败：请检查网络（已尝试有道/百度词典发音）'); return; }
+        triedBaidu = true;
+        a.src = baidu;
+        a.play().catch(function() {});
+      }
+      a.onerror = tryBaidu;
+      a.src = youdao;
+      var p = a.play();
+      if (p && p.catch) p.catch(tryBaidu);
+    }
     function speak(text, lang) {
-      if (!synth) { toast('当前浏览器不支持语音朗读'); return; }
-      if (synth.paused) { try { synth.resume(); } catch (e) {} }
-      var u = new SpeechSynthesisUtterance(text);
-      u.lang = lang || 'en-US';
-      u.rate = speechRate;
-      var v = pickVoice(lang);
-      if (v) u.voice = v;
-      u.onerror = function(ev) { toast('朗读失败：' + (ev && ev.error ? ev.error : '未知错误') + '（请确认设备已安装对应语音包）'); };
-      synth.cancel();
-      synth.speak(u);
+      if (synth && voices.length) {
+        if (synth.paused) { try { synth.resume(); } catch (e) {} }
+        var u = new SpeechSynthesisUtterance(text);
+        u.lang = lang || 'en-US';
+        u.rate = speechRate;
+        var v = pickVoice(lang);
+        if (v) u.voice = v;
+        u.onerror = function() { onlineSpeak(text, lang); };
+        synth.cancel();
+        synth.speak(u);
+        return;
+      }
+      onlineSpeak(text, lang);
     }
     document.querySelectorAll('.spk').forEach(function(b) {
       b.addEventListener('click', function(e) {
