@@ -2664,23 +2664,25 @@
     function onlineSpeak(text, lang) {
       var word = encodeURIComponent(text);
       var isZh = lang && lang.indexOf('zh') === 0;
+      // 百度 TTS 支持服务端语速(spd)，可靠性不依赖浏览器 playbackRate（小米等自带浏览器常忽略 playbackRate）
+      var spd = Math.max(1, Math.min(7, Math.round(speechRate * 5)));
+      var baidu = 'https://fanyi.baidu.com/gettts?lan=' + (isZh ? 'zh' : 'en') + '&text=' + word + '&spd=' + spd + '&source=web';
       var youdao = 'https://dict.youdao.com/dictvoice?audio=' + word + '&type=' + (isZh ? '1' : '2');
-      var baidu = 'https://fanyi.baidu.com/gettts?lan=' + (isZh ? 'zh' : 'en') + '&text=' + word + '&source=web';
       var a = new Audio();
-      // 在线接口本身不支持语速，统一用 audio.playbackRate 实现慢放/快放
-      try { a.playbackRate = Math.max(0.1, speechRate); } catch (e) {}
-      try { if ('preservesPitch' in a) a.preservesPitch = true; else if ('webkitPreservesPitch' in a) a.webkitPreservesPitch = true; } catch (e) {}
-      var triedBaidu = false;
-      function tryBaidu() {
-        if (triedBaidu) { toast('在线发音失败：请检查网络（已尝试有道/百度词典发音）'); return; }
-        triedBaidu = true;
-        a.src = baidu;
+      var triedYoudao = false;
+      function tryYoudao() {
+        if (triedYoudao) { toast('在线发音失败：请检查网络（已尝试百度/有道词典发音）'); return; }
+        triedYoudao = true;
+        // 有道无服务端语速，用客户端 playbackRate 减速（尽量保持音高）
+        try { a.playbackRate = Math.max(0.1, speechRate); } catch (e) {}
+        try { if ('preservesPitch' in a) a.preservesPitch = true; else if ('webkitPreservesPitch' in a) a.webkitPreservesPitch = true; } catch (e) {}
+        a.src = youdao;
         a.play().catch(function() {});
       }
-      a.onerror = tryBaidu;
-      a.src = youdao;
+      a.onerror = tryYoudao;
+      a.src = baidu;
       var p = a.play();
-      if (p && p.catch) p.catch(tryBaidu);
+      if (p && p.catch) p.catch(tryYoudao);
     }
     function speak(text, lang) {
       if (synth && voices.length) {
