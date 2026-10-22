@@ -2664,10 +2664,12 @@
     function onlineSpeak(text, lang) {
       var word = encodeURIComponent(text);
       var isZh = lang && lang.indexOf('zh') === 0;
-      var spd = Math.max(1, Math.min(7, Math.round(speechRate * 4)));
       var youdao = 'https://dict.youdao.com/dictvoice?audio=' + word + '&type=' + (isZh ? '1' : '2');
-      var baidu = 'https://fanyi.baidu.com/gettts?lan=' + (isZh ? 'zh' : 'en') + '&text=' + word + '&spd=' + spd + '&source=web';
+      var baidu = 'https://fanyi.baidu.com/gettts?lan=' + (isZh ? 'zh' : 'en') + '&text=' + word + '&source=web';
       var a = new Audio();
+      // 在线接口本身不支持语速，统一用 audio.playbackRate 实现慢放/快放
+      try { a.playbackRate = Math.max(0.1, speechRate); } catch (e) {}
+      try { if ('preservesPitch' in a) a.preservesPitch = true; else if ('webkitPreservesPitch' in a) a.webkitPreservesPitch = true; } catch (e) {}
       var triedBaidu = false;
       function tryBaidu() {
         if (triedBaidu) { toast('在线发音失败：请检查网络（已尝试有道/百度词典发音）'); return; }
