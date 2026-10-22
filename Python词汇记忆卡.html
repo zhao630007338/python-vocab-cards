@@ -2629,13 +2629,48 @@
       }
     });
     applyMemo();
+    // 朗读：兼容手机/平板（iOS Safari、Android Chrome）的语音合成
+    var synth = window.speechSynthesis;
+    var voices = [];
+    function loadVoices() { try { voices = (synth && synth.getVoices()) || []; } catch (e) { voices = []; } }
+    if (synth) { loadVoices(); synth.onvoiceschanged = loadVoices; }
+    function pickVoice(lang) {
+      if (!voices.length) return null;
+      var pref = (lang && lang.indexOf('zh') === 0) ? 'zh' : 'en';
+      var match = voices.filter(function(v) { return v.lang && v.lang.toLowerCase().indexOf(pref) === 0; });
+      return match[0] || voices[0] || null;
+    }
+    // iOS 需在首次用户手势内“预热”音频会话，否则整页朗读无声
+    var warmed = false;
+    function warmup() {
+      if (warmed || !synth) return; warmed = true;
+      try { var w = new SpeechSynthesisUtterance(' '); w.volume = 0; synth.speak(w); } catch (e) {}
+    }
+    document.addEventListener('touchstart', warmup, { once: true, passive: true });
+    document.addEventListener('click', warmup, { once: true });
+    var toastEl = null, toastTimer = null;
+    function toast(msg) {
+      if (!toastEl) {
+        toastEl = document.createElement('div');
+        toastEl.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:rgba(20,23,30,.92);color:#fff;font-size:13px;line-height:1.4;padding:10px 16px;border-radius:10px;z-index:999;max-width:80vw;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.25);';
+        document.body.appendChild(toastEl);
+      }
+      toastEl.textContent = msg;
+      toastEl.style.display = 'block';
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(function() { if (toastEl) toastEl.style.display = 'none'; }, 2800);
+    }
     function speak(text, lang) {
-      if (!('speechSynthesis' in window)) { alert('当前浏览器不支持语音朗读'); return; }
+      if (!synth) { toast('当前浏览器不支持语音朗读'); return; }
+      if (synth.paused) { try { synth.resume(); } catch (e) {} }
       var u = new SpeechSynthesisUtterance(text);
       u.lang = lang || 'en-US';
       u.rate = speechRate;
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(u);
+      var v = pickVoice(lang);
+      if (v) u.voice = v;
+      u.onerror = function(ev) { toast('朗读失败：' + (ev && ev.error ? ev.error : '未知错误') + '（请确认设备已安装对应语音包）'); };
+      synth.cancel();
+      synth.speak(u);
     }
     document.querySelectorAll('.spk').forEach(function(b) {
       b.addEventListener('click', function(e) {
